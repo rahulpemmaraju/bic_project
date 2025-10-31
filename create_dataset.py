@@ -84,10 +84,9 @@ def get_windowed_data(signal_array, label_array, window_length, stride, fs):
         window_ecg = signal_array[start:end]
         window_all_labels = label_array[start:end]
 
-        if not -1 in window_all_labels:
-            # get the most common label
-            window_label = int(stats.mode(window_all_labels).mode)
+        window_label = int(stats.mode(window_all_labels).mode)
 
+        if not window_label == -1:
             windowed_arrays.append(window_ecg)
             windowed_labels.append(window_label)
 
