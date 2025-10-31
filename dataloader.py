@@ -24,17 +24,17 @@ class ECGWaveformDataset(Dataset):
         self.binary = binary
 
     def __len__(self):
-        return len(self.data)
+        return len(self.metadata)
     
     def __getitem__(self, idx):
         
-        sample = metadata.iloc[idx]
+        sample = self.metadata.iloc[idx]
 
         waveform = self.data[sample.array_index]
         label = sample.label
 
         if self.binary:
-            label = int(label > 0)
+            label = torch.tensor(label > 0, dtype=torch.float32)
 
         if self.out_size is not None:
             t_old = np.linspace(0, 1, len(waveform))
@@ -80,4 +80,6 @@ if __name__ == '__main__':
     out_size = None
 
     
-    train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, out_size=None)
+    train_dataset, val_dataset, test_dataset = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, out_size=None, random_state=42)
+    print(train_dataset.metadata.label.value_counts())
+    print(val_dataset.metadata.label.value_counts())

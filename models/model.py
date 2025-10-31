@@ -7,8 +7,8 @@ import snntorch.surrogate as surrogate
 
 from typing import Union, List, Dict
 
-from neurons import LIF, ALIF
-from hebbian_linear import HebbianLinearLayer
+from .neurons import LIF, ALIF
+from .hebbian_linear import HebbianLinearLayer
 
 def get_activation_fn(act_name, act_kwargs):
     if act_name == 'relu':
@@ -17,6 +17,8 @@ def get_activation_fn(act_name, act_kwargs):
         return nn.Softmax(**act_kwargs)
     elif act_name == 'none':
         return nn.Identity()
+    elif act_name == 'sigmoid':
+        return nn.Sigmoid()
     
 def get_neuron_models(neuron_name, **neuron_kwargs):
     if neuron_name == 'lif':
@@ -29,6 +31,7 @@ class SpikingNetwork(nn.Module):
     def __init__(
             self, 
             in_dims: int, 
+            out_dims: int,
             fc_dims: List[int], 
             neuron_models: Union[str, List[str]] ='lif', 
             neuron_options: Union[Dict, List[Dict]] = {
@@ -39,17 +42,18 @@ class SpikingNetwork(nn.Module):
             linear_options: Union[Dict, List[Dict]] = {
                 'bias': True, 
             },
+            out_act: str = 'none',
+            out_act_kwargs: dict = {}
         ):
 
         '''
         initializes a basic spiking neural network for training (potentially with hebbian learning rules)
-        network is structured as: linear -> spiking -> linear -> spiking ...
+        network is structured as: linear -> spiking -> linear -> spiking ... -> output
         in_dims: size of network input
-        fc_dims: list where each element refers to the output dimensions of each linear layer
+        fc_dims: list where each element refers to the output dimensions of each linear layer before spiking layer
         neuron_models: spiking model to use
         neuron_options: dictionary of options to pass to spiking layer. if list, will apply separately to each spiking layer
         linear_options: dictionary of options to pass to spiking layer. if list, will apply separately to each spiking layer
-        out_act: activation function to apply to output layer
         '''
         
         super(SpikingNetwork, self).__init__()
@@ -74,6 +78,10 @@ class SpikingNetwork(nn.Module):
         for i in range(len(fc_dims) - 1):
             self.linear_layers.append(HebbianLinearLayer(fc_dims[i], fc_dims[i+1], **linear_options[i+1]))
         
+        self.fc_out = nn.Sequential(
+            nn.Linear(fc_dims[-1], out_dims),
+            get_activation_fn(out_act, out_act_kwargs)
+        )
 
     def reset_voltages(self, neuron_models, batch_dims, fc_dims):
         voltages = []
@@ -100,8 +108,11 @@ class SpikingNetwork(nn.Module):
             spike_out, volt_out, voltages = self.forward_timestep(x_t, voltages)
             out_spikes.append(spike_out)
             out_volts.append(volt_out)
+
+        out_spikes = torch.stack(out_spikes).transpose(0, 1).mean(1)
+        output = self.fc_out(out_spikes)
         
-        return torch.stack(out_spikes).transpose(0, 1), torch.stack(out_volts).transpose(0, 1)
+        return output
 
     def forward_timestep(self, x, in_voltages):
         # computes individual timestep output and returns output spiking and voltage
