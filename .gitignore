@@ -208,3 +208,5 @@ __marimo__/
 
 archive/
 data/
+
+.DS_Store
