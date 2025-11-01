@@ -1,1 +1,2 @@
-from .model import SpikingNetwork
+from .linear_snn import SpikingNetwork
+from .conv import TestCNN

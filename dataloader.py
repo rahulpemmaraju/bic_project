@@ -6,6 +6,8 @@ from sklearn.model_selection import train_test_split
 
 import torch
 from torch.utils.data import Dataset, DataLoader
+from torchvision.io import decode_image
+from torchvision import transforms
 
 class ECGWaveformDataset(Dataset):
     def __init__(self, data_file, metadata: pd.DataFrame, binary=False, out_size=None):
@@ -43,7 +45,60 @@ class ECGWaveformDataset(Dataset):
 
         return torch.tensor(waveform), label
     
-def train_test_val_split(data_file, metadata, train_prop, val_prop, test_prop, binary=False, out_size=None, random_state=0):
+class ECGSpectrogramDataset(Dataset):
+    def __init__(self, metadata: pd.DataFrame, binary=False, out_size=(128, 128), random_transforms=None):
+        '''
+        data_obj: hdf5 file containing the ecg_signals
+        metadata: dataframe containing the metadata for the data 
+        binary: whether or not the problem is a binary classification problem (normal vs abnormal)
+        out_size: if not None, will resize the ecg to a specific length
+        '''
+
+        self.metadata = metadata
+        self.out_size = out_size
+        self.binary = binary
+
+        self.resize = transforms.Resize(out_size)
+        self.random_transforms = random_transforms
+
+    def __len__(self):
+        return len(self.metadata)
+    
+    def __getitem__(self, idx):
+        
+        sample = self.metadata.iloc[idx]
+
+        img = decode_image(sample['spectrogram_path']).to(torch.float32) / 255.0
+        img = self.resize(img)
+
+        if self.random_transforms is not None:
+            img = self.random_transforms(img)
+
+        label = sample.label
+
+        if self.binary:
+            label = torch.tensor(label > 0, dtype=torch.float32)
+
+        return img, label
+
+    
+def train_test_val_split(
+        data_file, 
+        metadata, 
+        train_prop, 
+        val_prop, 
+        test_prop, 
+        binary=False, 
+        out_size=None, 
+        random_state=0, 
+        dataset_type='waveform', 
+        train_transforms=transforms.Compose([
+            transforms.RandomRotation(degrees=15),          # small random rotation
+            transforms.RandomAffine(degrees=0, translate=(0.1,0.1), scale=(0.9,1.1)),  # translate + scale
+            transforms.RandomResizedCrop(size=128, scale=(0.9, 1.0)),  # random crop + resize
+            transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),  # blur
+        ]),
+        **dataset_kwargs):
     # split the data into train/val/test splits at a patient level -> return ECGWaveformDataset objects for each one
     # data_file: path to file with raw data
     # metadata: path to metadata file
@@ -52,6 +107,8 @@ def train_test_val_split(data_file, metadata, train_prop, val_prop, test_prop, b
     # test_prop: proportion of data to use for testing
     # binary: whether or not the problem is a binary classification problem (normal vs abnormal)
     # out_size: used to resize ecg to specific length (default None -> no resizing which is what we probably want)
+    # dataset_type: either "waveform" (for raw waveforms) or "spectrogram" for spectrogram images
+    # train_transforms: only for spectrogram -> used for training augmentatino
     # random_state: ensures consistent splitting of data
 
     metadata_df = pd.read_csv(metadata)
@@ -65,9 +122,15 @@ def train_test_val_split(data_file, metadata, train_prop, val_prop, test_prop, b
     val_df = metadata_df[metadata_df['patient'].isin(val_patients)]
     test_df = metadata_df[metadata_df['patient'].isin(test_patients)]
 
-    train_dataset = ECGWaveformDataset(data_file, train_df, binary, out_size)
-    val_dataset = ECGWaveformDataset(data_file, val_df, binary, out_size)
-    test_dataset = ECGWaveformDataset(data_file, test_df, binary, out_size)
+    if dataset_type == 'waveform':
+        train_dataset = ECGWaveformDataset(data_file, train_df, binary, out_size, **dataset_kwargs)
+        val_dataset = ECGWaveformDataset(data_file, val_df, binary, out_size, **dataset_kwargs)
+        test_dataset = ECGWaveformDataset(data_file, test_df, binary, out_size, **dataset_kwargs)
+
+    elif dataset_type == 'spectrogram':
+        train_dataset = ECGSpectrogramDataset(train_df, binary, out_size, train_transforms, **dataset_kwargs)
+        val_dataset = ECGSpectrogramDataset(val_df, binary, out_size, **dataset_kwargs)
+        test_dataset = ECGSpectrogramDataset(test_df, binary, out_size, **dataset_kwargs)
 
     return train_dataset, val_dataset, test_dataset
 
@@ -80,6 +143,17 @@ if __name__ == '__main__':
     out_size = None
 
     
-    train_dataset, val_dataset, test_dataset = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, out_size=None, random_state=42)
-    print(train_dataset.metadata.label.value_counts())
-    print(val_dataset.metadata.label.value_counts())
+    train_dataset, _, _ = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, out_size=(128, 128), random_state=42, dataset_type='spectrogram')
+    print(np.where(train_dataset.metadata["label"] == 0)[0])
+
+    waveform, label = train_dataset.__getitem__(5836)
+
+    plt.imshow(waveform[0])
+    plt.title(label)
+    plt.show()
+
+    waveform, label = train_dataset.__getitem__(0)
+
+    plt.imshow(waveform[0])
+    plt.title(label)
+    plt.show()

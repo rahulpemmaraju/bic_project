@@ -5,8 +5,10 @@ import wfdb
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from PIL import Image
 import neurokit2 as nk
 from scipy import stats
+import scipy.signal as signal
 
 from config import ARR_DATA_DIR, NSR_DATA_DIR, ARRHYTHMIA_TO_ENCODING, NSR_TO_ENCODING
 
@@ -103,7 +105,29 @@ def preprocess_ecg(signal_array, method, fs):
 
     return nk.ecg_clean(signal_array, sampling_rate=fs, method=method)
 
-def process_patient(patient_path, dataset='nsr', window_length=5, stride=2, preprocessing_method='neurokit'):
+def get_spectrograms(signal_arrays, fs, patient_name, out_dir):
+    '''
+    computes spectrograms for list of signal_arrays, saves as png files, and returns file names
+    signal_array: 1D array of the ecg signal
+    fs: sampling rate of the signal
+    patient_name: name of the patient (for saving output file)
+    '''
+
+    out_paths = []
+
+    for i, signal_array in enumerate(signal_arrays):
+        out_path = os.path.join(out_dir, f'{patient_name}_{i}.png')
+        f, t_spec, Sxx  = signal.spectrogram(signal_array, nperseg=256, noverlap=245)
+        Sxx_log = 10 * np.log10(Sxx + 1e-8)
+        Sxx_norm = (255 * (Sxx_log - Sxx_log.min()) / (Sxx_log.max() - Sxx_log.min())).astype(np.uint8)
+        img = Image.fromarray(Sxx_norm)
+        img.save(out_path)
+
+        out_paths.append(out_path)
+        
+    return out_paths
+
+def process_patient(patient_path, img_folder, dataset='nsr', window_length=5, stride=2, preprocessing_method='neurokit'):
     '''
     does all the processing for a patient and returns the windowed data and metadata dict
     patient_path: path to ecg
@@ -126,8 +150,15 @@ def process_patient(patient_path, dataset='nsr', window_length=5, stride=2, prep
     label_array = get_per_sample_label(signal_array, annotation, dataset)
 
     patient_arrays, patient_labels = get_windowed_data(signal_array, label_array, window_length, stride, fs)
+    spectrogram_paths = get_spectrograms(patient_arrays, fs, annotation.record_name, img_folder)
 
-    patient_metadata = [{'patient': annotation.record_name, 'fs': fs, 'label': l} for l in patient_labels]
+    patient_metadata = [
+
+        {'patient': annotation.record_name, 
+         'fs': fs, 'label': l, 
+         'spectrogram_path': spectrogram_paths[i]} 
+
+    for i, l in enumerate(patient_labels)]
 
     return patient_arrays, patient_metadata
 
@@ -153,8 +184,11 @@ if __name__ == '__main__':
     preprocessing_method = 'neurokit'
 
     dataset_name = f'arr_only_{preprocessing_method}_{window_length}_{stride}'
-    h5_path = os.path.join('..', f'{dataset_name}.hdf5')
-    csv_path = os.path.join('..', f'{dataset_name}.csv')
+
+    h5_path = os.path.join('/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject', f'{dataset_name}.hdf5')
+    csv_path = os.path.join('/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject', f'{dataset_name}.csv')
+    img_folder = os.path.join('/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject', f'{dataset_name}')
+    os.makedirs(img_folder, exist_ok=True)
 
     metadata_dicts = []
 
@@ -171,7 +205,7 @@ if __name__ == '__main__':
     arrhythmia_paths = ['{}/{}'.format(ARR_DATA_DIR, x) for x in arrythmia_samples]
 
     for path in tqdm(arrhythmia_paths):
-        patient_arrays, patient_metadata = process_patient(path, 'arr', window_length, stride, preprocessing_method)
+        patient_arrays, patient_metadata = process_patient(path, img_folder, 'arr', window_length, stride, preprocessing_method)
         metadata_dicts += patient_metadata
         append_vlen(patient_arrays, h5_path)
 
