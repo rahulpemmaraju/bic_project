@@ -138,22 +138,26 @@ def train_test_val_split(
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    data_file = '../arr_only_neurokit_5_2.hdf5'
-    metadata = '../arr_only_neurokit_5_2.csv'
+    data_file = '../beat_neurokit_1.hdf5'
+    metadata = '../beat_neurokit_1.csv'
     out_size = None
 
     
-    train_dataset, _, _ = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, out_size=(128, 128), random_state=42, dataset_type='spectrogram')
-    print(np.where(train_dataset.metadata["label"] == 0)[0])
+    train_dataset, val_dataset, test_dataset = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, random_state=42)
+    print(np.where(train_dataset.metadata["label"] == 1)[0])
 
-    waveform, label = train_dataset.__getitem__(5836)
+    print(train_dataset.metadata['label'].value_counts())
+    print(val_dataset.metadata['label'].value_counts())
+    print(test_dataset.metadata['label'].value_counts())
 
-    plt.imshow(waveform[0])
+    waveform, label = train_dataset.__getitem__(229)
+
+    plt.plot(waveform)
     plt.title(label)
     plt.show()
 
-    waveform, label = train_dataset.__getitem__(0)
+    # waveform, label = train_dataset.__getitem__(0)
 
-    plt.imshow(waveform[0])
-    plt.title(label)
-    plt.show()
+    # plt.imshow(waveform)
+    # plt.title(label)
+    # plt.show()

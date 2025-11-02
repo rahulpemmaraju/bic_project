@@ -11,11 +11,35 @@ class TestCNN(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(TestCNN, self).__init__()
 
-        self.conv_1 = nn.Conv2d(in_channels, 8, 3, padding='same')
+        self.conv_1 = nn.Sequential(
+            nn.Conv2d(in_channels, 8, 5, padding='same'),
+            nn.BatchNorm2d(8),
+            nn.ReLU(),
 
-        self.conv_2 = nn.Conv2d(8, 16, 3, padding='same')
+            nn.Conv2d(8, 8, 3, padding='same'),
+            nn.BatchNorm2d(8),
+            nn.ReLU(),
+        )
 
-        self.conv_3 = nn.Conv2d(16, 32, 3, padding='same')
+        self.conv_2 = nn.Sequential(
+            nn.Conv2d(8, 16, 3, padding='same'),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+
+            nn.Conv2d(16, 16, 3, padding='same'),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+        )
+
+        self.conv_3 = nn.Sequential(
+            nn.Conv2d(16, 32, 3, padding='same'),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+
+            nn.Conv2d(32, 32, 3, padding='same'),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+        )
 
         self.out = nn.Linear(32 * 16 * 16, out_channels)
         

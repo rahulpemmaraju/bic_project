@@ -1,7 +1,32 @@
 ARR_DATA_DIR = '/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/mit-bih-arrhythmia-database-1.0.0'
 NSR_DATA_DIR = '/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/mit-bih-normal-sinus-rhythm-database-1.0.0'
 
-
+# USE THE AAMI EC57 STANDARD: https://arxiv.org/html/2503.07276v1
+BEAT_TO_ENCODING = {
+    '!': -1,
+    '"': -1,
+    '+': -1,
+    '/': -1,
+    'A': 1,
+    'E': 2,
+    'F': 3,
+    'J': 1,
+    'L': 0,
+    'N': 0,
+    'Q': -1,
+    'R': 0,
+    'S': 1,
+    'V': 2,
+    '[': -1,
+    ']': -1,
+    'a': 1,
+    'e': 0,
+    'f': 0,
+    'j': 0,
+    'x': -1,
+    '|': -1,
+    '~': -1,
+}
 
 ARRHYTHMIA_TO_ENCODING = {
     '(AB': 2,

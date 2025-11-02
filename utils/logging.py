@@ -42,37 +42,3 @@ def log_model(train_losses, val_losses, log_dir):
     # Save to file without showing
     fig.savefig(os.path.join(log_dir, 'losses.png'), dpi=300)  # high resolution
     plt.close(fig)  # close the figure to free memory
-
-def get_roc_curve(model, test_loader, encoder, log_dir, device='cpu'):
-    y_true = []
-    y_pred = []
-
-    model.eval()
-
-    with torch.no_grad():
-        for data, target in test_loader:
-            if encoder is not None:
-                data = encoder.encode(data)
-            data, target = data.to(device), target.to(device)
-
-            output = model(data).squeeze(1)
-    
-            y_true.append(target.numpy())
-            y_pred.append(output.numpy())
-
-    y_true = np.concatenate(y_true, axis=0)
-    y_pred = np.concatenate(y_pred, axis=0)
-
-    fpr, tpr, thresholds = roc_curve(y_true, y_pred)
-
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=150)
-
-    ax.plot(fpr, tpr, label='ROC Curve')
-    ax.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Chance')
-    ax.set_xlabel('False Positive Rate')
-    ax.set_ylabel('True Positive Rate')
-    ax.set_title('ROC Curve')
-    ax.legend()
-
-    fig.savefig(os.path.join(log_dir, 'test_roc.png'), dpi=300)  # high resolution
-    plt.show()

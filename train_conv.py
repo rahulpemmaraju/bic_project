@@ -144,7 +144,7 @@ if __name__ == '__main__':
         "binary": True,
         "dataset_type": "spectrogram",
         "out_size": (128, 128),
-        "random_state": 42
+        "random_state": 100
     }
 
     train_batch_size = 16
@@ -172,7 +172,7 @@ if __name__ == '__main__':
 
     loss_fn = nn.BCEWithLogitsLoss()
 
-    num_epochs = 20
+    num_epochs = 50
     val_steps = 2
 
     print('Training Model')
@@ -194,4 +194,4 @@ if __name__ == '__main__':
     checkpoint = torch.load(model_path, map_location='cpu')
     model.load_state_dict(checkpoint['model'])
 
-    get_roc_curve(model, test_loader, None, logging_configs['log_folder'], device)
+    get_roc_curve(model, test_loader, None, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)

@@ -11,7 +11,9 @@ import pandas as pd
 from dataloader import train_test_val_split
 from models import SpikingNetwork
 from utils.encoding import Rate_Encoder
-from utils.logging import log_model, get_roc_curve
+
+from utils.logging import log_model
+import utils.metrics as metrics
 
 def train_step(model, train_loader, encoder, optimizer, loss_fn, epoch, device):
 
@@ -23,6 +25,7 @@ def train_step(model, train_loader, encoder, optimizer, loss_fn, epoch, device):
        
         data = encoder.encode(data)
         data, target = data.to(device), target.to(device)
+
         output = model(data).squeeze(1)
 
         loss = loss_fn(output, target)
@@ -137,30 +140,32 @@ if __name__ == '__main__':
     device = 'cpu'
 
     # --- Create Datasets/DataLoaders --- #
+    binary = False
+
     dataset_configs = {
-        "data_file": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/arr_only_neurokit_5_2.hdf5",
-        "metadata": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/arr_only_neurokit_5_2.csv",
+        "data_file": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.hdf5",
+        "metadata": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.csv",
         "train_prop": 0.6,
         "val_prop": 0.2,
         "test_prop": 0.2,
-        "binary": True,
+        "binary": binary,
         "random_state": 42
     }
 
-    train_batch_size = 32
-    eval_batch_size = 64
+    train_batch_size = 64
+    eval_batch_size = 128
 
     train_dataset, val_dataset, test_dataset = train_test_val_split(**dataset_configs)
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=64)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=eval_batch_size)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=eval_batch_size)
 
     # --- Model Configs --- #
     model_configs = {
-        "in_dims": 1800,
-        "out_dims": 1,
-        "fc_dims": [900, 450],
+        "in_dims": 360,
+        "out_dims": 4,
+        "fc_dims": [180],
         "neuron_models": "lif",
         "neuron_options": {
             "beta": 0.9,
@@ -170,15 +175,15 @@ if __name__ == '__main__':
         "linear_options": {
             "bias": True
         },
-        "out_act": "sigmoid",
+        "out_act": "none",
     }
 
     logging_configs={
-        'model_name': 'snn_test',
+        'model_name': 'snn_multiclass_test',
         'weight_folder': '../train_weights',
         'log_folder': '../train_logs',
         'log_steps': 1
-    }    
+    }
     
     # --- Train the Model --- #
     model = SpikingNetwork(**model_configs)
@@ -186,12 +191,12 @@ if __name__ == '__main__':
     timesteps = 20
     encoder = Rate_Encoder(timesteps)
 
-    learning_rate = 1e-4
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    learning_rate = 5e-4
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
 
-    loss_fn = nn.BCELoss()
+    loss_fn = nn.CrossEntropyLoss()
 
-    num_epochs = 5
+    num_epochs = 10
     val_steps = 1
 
     print('Training Model')
@@ -209,4 +214,12 @@ if __name__ == '__main__':
         logging_configs,
     )
 
-    get_roc_curve(model, test_loader, encoder, device)
+    threshold = None
+    if binary:
+        threshold = metrics.get_threshold(model, val_loader, encoder, device)
+
+    accuracy = metrics.get_accuracy(model, test_loader, encoder, binary, threshold, device)
+    print('\nTest Set Accuracy: {}'.format(accuracy))
+
+    if binary:
+        metrics.get_roc_curve(model, test_loader, encoder, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)
