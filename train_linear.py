@@ -10,7 +10,7 @@ import pandas as pd
 
 from dataloader import train_test_val_split
 from models import SpikingNetwork
-from utils.encoding import Rate_Encoder
+from utils.encoding import Rate_Encoder, Current_Encoder
 
 from utils.logging import log_model
 import utils.metrics as metrics
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     device = 'cpu'
 
     # --- Create Datasets/DataLoaders --- #
-    binary = False
+    binary = True
 
     dataset_configs = {
         "data_file": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.hdf5",
@@ -149,7 +149,8 @@ if __name__ == '__main__':
         "val_prop": 0.2,
         "test_prop": 0.2,
         "binary": binary,
-        "random_state": 42
+        "random_state": 42,
+        "balance": False,
     }
 
     train_batch_size = 64
@@ -161,14 +162,19 @@ if __name__ == '__main__':
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=eval_batch_size)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=eval_batch_size)
 
+    if binary:
+        out_dims = 1
+    else:
+        out_dims = 4
+
     # --- Model Configs --- #
     model_configs = {
         "in_dims": 360,
-        "out_dims": 4,
+        "out_dims": out_dims,
         "fc_dims": [180],
         "neuron_models": "lif",
         "neuron_options": {
-            "beta": 0.9,
+            "beta": 0.5,
             "threshold": 1.0,
             "spike_fn": surrogate.atan(alpha=2)
         },
@@ -176,10 +182,11 @@ if __name__ == '__main__':
             "bias": True
         },
         "out_act": "none",
+        "spike_accumulator": "sum"
     }
 
     logging_configs={
-        'model_name': 'snn_multiclass_test',
+        'model_name': 'snn_binary_test',
         'weight_folder': '../train_weights',
         'log_folder': '../train_logs',
         'log_steps': 1
@@ -194,9 +201,12 @@ if __name__ == '__main__':
     learning_rate = 5e-4
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
 
-    loss_fn = nn.CrossEntropyLoss()
+    if binary:
+        loss_fn = nn.BCEWithLogitsLoss() # higher pos_weight -> correct positive prediction is more important 
+    else:
+        loss_fn = nn.CrossEntropyLoss()
 
-    num_epochs = 10
+    num_epochs = 5
     val_steps = 1
 
     print('Training Model')
@@ -222,4 +232,4 @@ if __name__ == '__main__':
     print('\nTest Set Accuracy: {}'.format(accuracy))
 
     if binary:
-        metrics.get_roc_curve(model, test_loader, encoder, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)
+        metrics.get_roc_curve(model, test_loader, encoder, threshold, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)

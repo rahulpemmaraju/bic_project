@@ -27,20 +27,26 @@ def get_neuron_models(neuron_name, **neuron_kwargs):
         return ALIF(**neuron_kwargs)
 
 
-class SpikingNetwork(nn.Module):
+class SpikingCNN(nn.Module):
     def __init__(
             self, 
+            in_size: int,
             in_dims: int, 
             out_dims: int,
-            fc_dims: List[int], 
+            n_filters: List[int], 
             neuron_models: Union[str, List[str]] ='lif', 
             neuron_options: Union[Dict, List[Dict]] = {
                 'beta': 0.9,
                 'threshold': 1.0,
                 'spike_fn': surrogate.atan(alpha=2),
             },
-            linear_options: Union[Dict, List[Dict]] = {
-                'bias': True, 
+            conv_options: Union[Dict, List[Dict]] = {
+                'kernel_size': 36,
+                'stride': 1,
+                'padding': 'same', 
+                'dilation': 1,
+                'groups': 1,
+                'bias': True,
             },
             out_act: str = 'none',
             out_act_kwargs: dict = {},
@@ -50,8 +56,9 @@ class SpikingNetwork(nn.Module):
         '''
         initializes a basic spiking neural network for training (potentially with hebbian learning rules)
         network is structured as: linear -> spiking -> linear -> spiking ... -> output
-        in_dims: size of network input
-        fc_dims: list where each element refers to the output dimensions of each linear layer before spiking layer
+        in_size: size of network input
+        in_dims: number of channels in network input
+        n_filters: list where each element refers to the output dimensions of each conv layer before spiking layer
         neuron_models: spiking model to use
         neuron_options: dictionary of options to pass to spiking layer. if list, will apply separately to each spiking layer
         linear_options: dictionary of options to pass to spiking layer. if list, will apply separately to each spiking layer
@@ -59,39 +66,61 @@ class SpikingNetwork(nn.Module):
         spike_accumulator: either "sum" or "last" -> how to pass spikes for prediction
         '''
         
-        super(SpikingNetwork, self).__init__()
+        super(SpikingCNN, self).__init__()
 
         if isinstance(neuron_models, str):
-            neuron_models = [neuron_models for _ in fc_dims]
+            neuron_models = [neuron_models for _ in n_filters]
 
         if isinstance(neuron_options, dict):
-            neuron_options = [neuron_options for _ in fc_dims]
+            neuron_options = [neuron_options for _ in n_filters]
 
-        if isinstance(linear_options, dict):
-            linear_options = [linear_options for _ in fc_dims]
+        if isinstance(conv_options, dict):
+            conv_options = [conv_options for _ in n_filters]
 
         self.neuron_models = neuron_models
         self.neuron_options = neuron_options
-        self.linear_options = linear_options
-        self.fc_dims = fc_dims
+        self.linear_options = conv_options
+        self.n_filters = n_filters
 
-        self.linear_layers = nn.ModuleList([HebbianLinearLayer(in_dims, fc_dims[0], **linear_options[0])])
+        self.conv_layers = nn.ModuleList([nn.Conv1d(in_dims, n_filters[0], **conv_options[0])])
         self.spiking_layers = nn.ModuleList([get_neuron_models(neuron_models[i], **neuron_options[i]) for i in range(len(neuron_models))])
         
-        for i in range(len(fc_dims) - 1):
-            self.linear_layers.append(HebbianLinearLayer(fc_dims[i], fc_dims[i+1], **linear_options[i+1]))
+        out_size = self._calculate_conv_size(in_size, conv_options[0])
+
+        for i in range(len(conv_options) - 1):
+            self.conv_layers.append(nn.Conv1d(n_filters[i], n_filters[i+1], **conv_options[i+1]))
+            out_size = self._calculate_conv_size(out_size, conv_options[i+1])
         
         self.fc_out = nn.Sequential(
-            nn.Linear(fc_dims[-1], out_dims),
+            nn.Linear(out_size * n_filters[-1], out_dims),
             get_activation_fn(out_act, out_act_kwargs)
         )
 
         self.accumulate = spike_accumulator
 
-    def reset_voltages(self, neuron_models, batch_dims, fc_dims):
+    def _calculate_conv_size(self, in_size, conv_options):
+        # calculate the output size of a conv or conv-like operation (ex. max pool)
+
+        padding = conv_options['padding']
+
+        if padding == 'same':
+            return in_size
+        
+        kernel_size = conv_options['kernel_size']
+        stride = conv_options['stride']
+
+        if isinstance(kernel_size, int):
+            kernel_size = (kernel_size, kernel_size)
+
+        out_size = (in_size[0] + 2*padding - kernel_size[0]) //stride + 1
+
+        return out_size
+
+
+    def reset_voltages(self, neuron_models, batch_dims, n_filters):
         voltages = []
 
-        for neuron_name, out_dim in zip(neuron_models, fc_dims):
+        for neuron_name, out_dim in zip(neuron_models, n_filters):
             if neuron_name == 'lif':
                 voltages.append(torch.zeros(batch_dims, out_dim))
             elif neuron_name == 'alif': 
@@ -102,15 +131,16 @@ class SpikingNetwork(nn.Module):
     def forward(self, x):
         # forward method: takes in an input [batch_size, num_timesteps, in_dims] and computes output over several timesteps
 
-        B, T, I = x.shape 
+        B, T, C, L = x.shape 
 
-        voltages = self.reset_voltages(self.neuron_models, B, self.fc_dims) # initialize the voltages
+        voltages = self.reset_voltages(self.neuron_models, B, [L * n for n in self.n_filters]) # initialize the voltages
         out_spikes = []
         out_volts = []
 
         for t in range(T):
-            x_t = x[:, t, :]
+            x_t = x[:, t, :, :]
             spike_out, volt_out, voltages = self.forward_timestep(x_t, voltages)
+            spike_out = spike_out.reshape(spike_out.shape[0], -1)
             out_spikes.append(spike_out)
             out_volts.append(volt_out)
 
@@ -119,7 +149,6 @@ class SpikingNetwork(nn.Module):
             output = self.fc_out(out_spikes)
         else:
             output = self.fc_out(spike_out)
-
         
         return output
 
@@ -127,8 +156,11 @@ class SpikingNetwork(nn.Module):
         # computes individual timestep output and returns output spiking and voltage
         out_voltages = []
 
-        for (neuron_name, lin_layer, spike_layer, in_volt) in zip(self.neuron_models, self.linear_layers, self.spiking_layers, in_voltages):
-            x = lin_layer(x)
+        for (neuron_name, conv_layer, spike_layer, in_volt) in zip(self.neuron_models, self.conv_layers, self.spiking_layers, in_voltages):
+            x = conv_layer(x)
+            B, C, L = x.shape
+
+            x = x.reshape(B, -1)
             if neuron_name == 'lif':
                 x, v = spike_layer(in_volt, x)
                 out_voltages.append(v)
@@ -137,10 +169,13 @@ class SpikingNetwork(nn.Module):
                 x, v, a = spike_layer(*in_volt, x)
                 out_voltages.append((v, a))
 
+            x = x.reshape(B, C, L)
+
         return x, v, out_voltages
 
 if __name__ == '__main__':
-    net = SpikingNetwork(32, [48, 64])
-    x = torch.randn((5, 10, 32))
+    net = SpikingCNN(64, 1, 1, [48, 64])
+    x = torch.randn((5, 10, 1, 64))
 
-    s, v = net(x)
+    out = net(x)
+    print(out.shape)

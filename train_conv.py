@@ -9,9 +9,11 @@ import numpy as np
 import pandas as pd
 
 from dataloader import train_test_val_split
-from models import TestCNN
-from utils.encoding import Rate_Encoder
-from utils.logging import log_model, get_roc_curve
+from models import SpikingCNN
+from utils.encoding import Rate_Encoder_CNN
+
+from utils.logging import log_model
+import utils.metrics as metrics
 
 def train_step(model, train_loader, encoder, optimizer, loss_fn, epoch, device):
 
@@ -21,7 +23,9 @@ def train_step(model, train_loader, encoder, optimizer, loss_fn, epoch, device):
     for batch_idx, (data, target) in enumerate(train_loader): 
         optimizer.zero_grad()
        
+        data = encoder.encode(data)
         data, target = data.to(device), target.to(device)
+
         output = model(data).squeeze(1)
 
         loss = loss_fn(output, target)
@@ -46,6 +50,7 @@ def evaluate_model(model, test_loader, encoder, loss_fn, device):
 
     with torch.no_grad():
         for data, target in test_loader:
+            data = encoder.encode(data)
             data, target = data.to(device), target.to(device)
 
             output = model(data).squeeze(1)
@@ -135,20 +140,21 @@ if __name__ == '__main__':
     device = 'cpu'
 
     # --- Create Datasets/DataLoaders --- #
+    binary = True
+
     dataset_configs = {
-        "data_file": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/arr_only_neurokit_5_2.hdf5",
-        "metadata": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/arr_only_neurokit_5_2.csv",
+        "data_file": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.hdf5",
+        "metadata": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.csv",
         "train_prop": 0.6,
         "val_prop": 0.2,
         "test_prop": 0.2,
-        "binary": True,
-        "dataset_type": "spectrogram",
-        "out_size": (128, 128),
-        "random_state": 100
+        "binary": binary,
+        "random_state": 42,
+        "balance": False,
     }
 
-    train_batch_size = 16
-    eval_batch_size = 32
+    train_batch_size = 32
+    eval_batch_size = 128
 
     train_dataset, val_dataset, test_dataset = train_test_val_split(**dataset_configs)
 
@@ -156,24 +162,58 @@ if __name__ == '__main__':
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=eval_batch_size)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=eval_batch_size)
 
+    if binary:
+        out_dims = 1
+    else:
+        out_dims = 4
+
+    # --- Model Configs --- #
+    model_configs = {
+        'in_size': 360,
+        'in_dims': 1, 
+        'out_dims': out_dims,
+        'n_filters': [32], 
+        'neuron_models': 'lif', 
+        'neuron_options': {
+            'beta': 0.9,
+            'threshold': 1.0,
+            'spike_fn': surrogate.atan(alpha=2),
+        },
+        'conv_options': {
+            'kernel_size': 5,
+            'stride': 1,
+            'padding': 'same', 
+            'dilation': 1,
+            'groups': 1,
+            'bias': True,
+        },
+        'out_act': 'none',
+        'spike_accumulator': 'sum',
+    }
 
     logging_configs={
-        'model_name': 'cnn_test',
+        'model_name': 'snn_binary_cnn_test',
         'weight_folder': '../train_weights',
         'log_folder': '../train_logs',
-        'log_steps': 5
-    }    
+        'log_steps': 1
+    }
     
     # --- Train the Model --- #
-    model = TestCNN(1, 1)
+    model = SpikingCNN(**model_configs)
+
+    timesteps = 20
+    encoder = Rate_Encoder_CNN(timesteps)
 
     learning_rate = 5e-4
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
 
-    loss_fn = nn.BCEWithLogitsLoss()
+    if binary:
+        loss_fn = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1])) # higher weight -> correct positive prediction is more important 
+    else:
+        loss_fn = nn.CrossEntropyLoss()
 
-    num_epochs = 50
-    val_steps = 2
+    num_epochs = 5
+    val_steps = 1
 
     print('Training Model')
 
@@ -181,7 +221,7 @@ if __name__ == '__main__':
         model,
         train_loader,
         val_loader,
-        None,
+        encoder,
         optimizer,
         loss_fn,
         num_epochs,
@@ -190,8 +230,12 @@ if __name__ == '__main__':
         logging_configs,
     )
 
-    model_path = os.path.join(logging_configs['weight_folder'], logging_configs['model_name']) + '.pth'
-    checkpoint = torch.load(model_path, map_location='cpu')
-    model.load_state_dict(checkpoint['model'])
+    threshold = None
+    if binary:
+        threshold = metrics.get_threshold(model, val_loader, encoder, device)
 
-    get_roc_curve(model, test_loader, None, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)
+    accuracy = metrics.get_accuracy(model, test_loader, encoder, binary, threshold, device)
+    print('\nTest Set Accuracy: {}'.format(accuracy))
+
+    if binary:
+        metrics.get_roc_curve(model, test_loader, encoder, threshold, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)

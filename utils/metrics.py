@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, confusion_matrix, ConfusionMatrixDisplay
 
 import torch
 
@@ -73,7 +73,7 @@ def get_accuracy(model, test_loader, encoder, binary=True, threshold=None, devic
     
 
 
-def get_roc_curve(model, test_loader, encoder, log_dir, device='cpu'):
+def get_roc_curve(model, test_loader, encoder, threshold, log_dir, device='cpu'):
     y_true = []
     y_pred = []
 
@@ -107,4 +107,13 @@ def get_roc_curve(model, test_loader, encoder, log_dir, device='cpu'):
     ax.legend()
 
     fig.savefig(os.path.join(log_dir, 'test_roc.png'), dpi=300)  # high resolution
+    plt.show()
+
+    y_pred = (y_pred > threshold).astype(int)
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(cm)
+    disp.plot(cmap='Blues')
+
+    plt.title("Confusion Matrix")
+    plt.savefig(os.path.join(log_dir, 'test_confusion_matrix.png'), dpi=300, bbox_inches='tight')
     plt.show()

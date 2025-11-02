@@ -33,7 +33,7 @@ class ECGWaveformDataset(Dataset):
         sample = self.metadata.iloc[idx]
 
         waveform = self.data[sample.array_index]
-        label = sample.label
+        label = torch.tensor(sample.label, dtype=torch.long)
 
         if self.binary:
             label = torch.tensor(label > 0, dtype=torch.float32)
@@ -98,6 +98,7 @@ def train_test_val_split(
             transforms.RandomResizedCrop(size=128, scale=(0.9, 1.0)),  # random crop + resize
             transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),  # blur
         ]),
+        balance=False,
         **dataset_kwargs):
     # split the data into train/val/test splits at a patient level -> return ECGWaveformDataset objects for each one
     # data_file: path to file with raw data
@@ -110,8 +111,18 @@ def train_test_val_split(
     # dataset_type: either "waveform" (for raw waveforms) or "spectrogram" for spectrogram images
     # train_transforms: only for spectrogram -> used for training augmentatino
     # random_state: ensures consistent splitting of data
+    # balance: tries to make the dataset slightly more balanced
 
     metadata_df = pd.read_csv(metadata)
+
+    # balance dataset by ensuring there are equal number of positive and negative samples
+    if balance:
+        neg_df = metadata_df[metadata_df["label"] == 0]
+        pos_df = metadata_df[metadata_df["label"] != 0]
+        num_pos = len(pos_df)
+
+        neg_sampled = neg_df.sample(n=num_pos, random_state=random_state)
+        metadata_df = pd.concat([neg_sampled, pos_df]).sample(frac=1, random_state=42).reset_index(drop=True)
 
     patients = metadata_df['patient'].unique()
     train_val_patients, test_patients = train_test_split(patients, test_size=test_prop, random_state=random_state)
@@ -143,21 +154,15 @@ if __name__ == '__main__':
     out_size = None
 
     
-    train_dataset, val_dataset, test_dataset = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, random_state=42)
+    train_dataset, val_dataset, test_dataset = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, balance=True, random_state=42)
     print(np.where(train_dataset.metadata["label"] == 1)[0])
 
     print(train_dataset.metadata['label'].value_counts())
     print(val_dataset.metadata['label'].value_counts())
     print(test_dataset.metadata['label'].value_counts())
 
-    waveform, label = train_dataset.__getitem__(229)
+    waveform, label = train_dataset.__getitem__(399)
 
     plt.plot(waveform)
     plt.title(label)
     plt.show()
-
-    # waveform, label = train_dataset.__getitem__(0)
-
-    # plt.imshow(waveform)
-    # plt.title(label)
-    # plt.show()
