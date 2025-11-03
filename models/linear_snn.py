@@ -22,9 +22,7 @@ def get_activation_fn(act_name, act_kwargs):
     
 def get_neuron_models(neuron_name, **neuron_kwargs):
     if neuron_name == 'lif':
-        return LIF(**neuron_kwargs)
-    elif neuron_name == 'alif':
-        return ALIF(**neuron_kwargs)
+        return snn.Leaky(**neuron_kwargs)
 
 
 class SpikingNetwork(nn.Module):
@@ -37,7 +35,7 @@ class SpikingNetwork(nn.Module):
             neuron_options: Union[Dict, List[Dict]] = {
                 'beta': 0.9,
                 'threshold': 1.0,
-                'spike_fn': surrogate.atan(alpha=2),
+                'spike_grad': surrogate.atan(alpha=2),
             },
             linear_options: Union[Dict, List[Dict]] = {
                 'bias': True, 
@@ -60,6 +58,7 @@ class SpikingNetwork(nn.Module):
         '''
         
         super(SpikingNetwork, self).__init__()
+
 
         if isinstance(neuron_models, str):
             neuron_models = [neuron_models for _ in fc_dims]
@@ -91,18 +90,18 @@ class SpikingNetwork(nn.Module):
     def reset_voltages(self, neuron_models, batch_dims, fc_dims):
         voltages = []
 
-        for neuron_name, out_dim in zip(neuron_models, fc_dims):
-            if neuron_name == 'lif':
+        for i, (neuron_name, out_dim) in enumerate(zip(neuron_models, fc_dims)):
+            if neuron_name == 'lif_custom' or neuron_name == 'lif':
                 voltages.append(torch.zeros(batch_dims, out_dim))
-            elif neuron_name == 'alif': 
+            elif neuron_name == 'alif_custom': 
                 voltages.append((torch.zeros(batch_dims, out_dim), torch.zeros(batch_dims, out_dim)))
-
+                
         return voltages
     
     def forward(self, x):
         # forward method: takes in an input [batch_size, num_timesteps, in_dims] and computes output over several timesteps
 
-        B, T, I = x.shape 
+        B, T, I = x.shape
 
         voltages = self.reset_voltages(self.neuron_models, B, self.fc_dims) # initialize the voltages
         out_spikes = []

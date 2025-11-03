@@ -10,7 +10,7 @@ from torchvision.io import decode_image
 from torchvision import transforms
 
 class ECGWaveformDataset(Dataset):
-    def __init__(self, data_file, metadata: pd.DataFrame, binary=False, out_size=None):
+    def __init__(self, data_file, metadata: pd.DataFrame, binary=False, out_size=None, fourier=False):
         '''
         data_obj: hdf5 file containing the ecg_signals
         metadata: dataframe containing the metadata for the data 
@@ -24,6 +24,7 @@ class ECGWaveformDataset(Dataset):
         self.metadata = metadata
         self.out_size = out_size
         self.binary = binary
+        self.fourier = fourier
 
     def __len__(self):
         return len(self.metadata)
@@ -43,7 +44,12 @@ class ECGWaveformDataset(Dataset):
             t_new = np.linspace(0, 1, self.out_size)
             waveform = interp1d(t_old, waveform)(t_new)
 
-        return torch.tensor(waveform), label
+        waveform = torch.tensor(waveform)
+
+        if self.fourier:
+            waveform = torch.abs(torch.fft.rfft(waveform, dim=-1))
+
+        return waveform, label
     
 class ECGSpectrogramDataset(Dataset):
     def __init__(self, metadata: pd.DataFrame, binary=False, out_size=(128, 128), random_transforms=None):
@@ -145,6 +151,10 @@ def train_test_val_split(
 
     return train_dataset, val_dataset, test_dataset
 
+def get_dataset_statistics(dataset):
+    # returns the mean and standard deviation of the dataset (useful for normalization)
+    all_samples = [dataset.__getitem__(i)[0] for i in range(len(dataset))]
+    return np.mean(all_samples), np.std(all_samples)
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -154,15 +164,16 @@ if __name__ == '__main__':
     out_size = None
 
     
-    train_dataset, val_dataset, test_dataset = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, balance=True, random_state=42)
-    print(np.where(train_dataset.metadata["label"] == 1)[0])
+    train_dataset, val_dataset, test_dataset = train_test_val_split(data_file, metadata, 0.6, 0.2, 0.2, balance=True, random_state=42, fourier=True)
+    print(get_dataset_statistics(train_dataset))
+    # print(np.where(train_dataset.metadata["label"] == 1)[0])
 
-    print(train_dataset.metadata['label'].value_counts())
-    print(val_dataset.metadata['label'].value_counts())
-    print(test_dataset.metadata['label'].value_counts())
+    # print(train_dataset.metadata['label'].value_counts())
+    # print(val_dataset.metadata['label'].value_counts())
+    # print(test_dataset.metadata['label'].value_counts())
 
-    waveform, label = train_dataset.__getitem__(399)
+    # waveform, label = train_dataset.__getitem__(399)
 
-    plt.plot(waveform)
-    plt.title(label)
-    plt.show()
+    # plt.plot(waveform)
+    # plt.title(label)
+    # plt.show()

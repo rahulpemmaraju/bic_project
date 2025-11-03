@@ -5,11 +5,12 @@ import torch.nn.functional as F
 import snntorch.surrogate as surrogate
 
 import os
+import random
 import numpy as np
 import pandas as pd
 
-from dataloader import train_test_val_split
-from models import SpikingNetwork
+from dataloader import train_test_val_split, get_dataset_statistics
+from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN, TwoLayer_HierarchicalSNN
 from utils.encoding import Rate_Encoder, Current_Encoder
 
 from utils.logging import log_model
@@ -137,7 +138,13 @@ def train_model(
 
 if __name__ == '__main__':
 
+    seed = 42
     device = 'cpu'
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
 
     # --- Create Datasets/DataLoaders --- #
     binary = True
@@ -149,14 +156,16 @@ if __name__ == '__main__':
         "val_prop": 0.2,
         "test_prop": 0.2,
         "binary": binary,
-        "random_state": 42,
-        "balance": False,
+        "random_state": seed,
+        "balance": True,
+        "fourier": False,
     }
 
     train_batch_size = 64
     eval_batch_size = 128
 
     train_dataset, val_dataset, test_dataset = train_test_val_split(**dataset_configs)
+    train_mean, train_std = get_dataset_statistics(train_dataset)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=eval_batch_size)
@@ -165,38 +174,41 @@ if __name__ == '__main__':
     if binary:
         out_dims = 1
     else:
-        out_dims = 4
+        out_dims = 5
 
     # --- Model Configs --- #
     model_configs = {
-        "in_dims": 360,
-        "out_dims": out_dims,
-        "fc_dims": [180],
-        "neuron_models": "lif",
-        "neuron_options": {
-            "beta": 0.5,
-            "threshold": 1.0,
-            "spike_fn": surrogate.atan(alpha=2)
+        'in_dims': 1,
+        'out_dims': out_dims,
+        'recurrent_dims': [32, 64],
+        'out_act': 'none',
+        'out_act_kwargs': {},
+        'neuron_options': {
+            'beta': 0.9,
+            'threshold': 1.0,
+            'spike_grad': surrogate.atan(alpha=2), 
+            'linear_options':{
+                'learning_rule': 'oja',
+                'learning_rate': 1e-4,
+                'bias': True
+            }
         },
-        "linear_options": {
-            "bias": True
-        },
-        "out_act": "none",
-        "spike_accumulator": "sum"
+        'spike_accumulator': 'sum',
     }
 
     logging_configs={
-        'model_name': 'snn_binary_test',
+        'model_name': 's_42_two_layer_snn_binary_32_64_current_balanced',
         'weight_folder': '../train_weights',
         'log_folder': '../train_logs',
         'log_steps': 1
     }
     
     # --- Train the Model --- #
-    model = SpikingNetwork(**model_configs)
+    model = TwoLayer_HierarchicalSNN(**model_configs)
 
     timesteps = 20
     encoder = Rate_Encoder(timesteps)
+    encoder = Current_Encoder(train_mean, train_std)
 
     learning_rate = 5e-4
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
@@ -224,9 +236,16 @@ if __name__ == '__main__':
         logging_configs,
     )
 
+    model_path = os.path.join(logging_configs['weight_folder'], logging_configs['model_name']) + '.pth'
+    checkpoint = torch.load(model_path)
+    model.load_state_dict(checkpoint['model'])
+
     threshold = None
     if binary:
         threshold = metrics.get_threshold(model, val_loader, encoder, device)
+        checkpoint['threshold'] = threshold
+        torch.save(checkpoint, model_path)
+
 
     accuracy = metrics.get_accuracy(model, test_loader, encoder, binary, threshold, device)
     print('\nTest Set Accuracy: {}'.format(accuracy))
