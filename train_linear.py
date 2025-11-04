@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from dataloader import train_test_val_split, get_dataset_statistics
-from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN, TwoLayer_HierarchicalSNN
+from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN, TwoLayer_HierarchicalSNN, TwoLayer_MultiscaleSNN
 from utils.encoding import Rate_Encoder, Current_Encoder
 
 from utils.logging import log_model
@@ -197,14 +197,14 @@ if __name__ == '__main__':
     }
 
     logging_configs={
-        'model_name': 's_42_two_layer_snn_binary_32_64_current_balanced',
+        'model_name': f's_{seed}_two_layer_snn_binary_32_64_current_balanced',
         'weight_folder': '../train_weights',
         'log_folder': '../train_logs',
         'log_steps': 1
     }
     
     # --- Train the Model --- #
-    model = TwoLayer_HierarchicalSNN(**model_configs)
+    model = TwoLayerSNN(**model_configs)
 
     timesteps = 20
     encoder = Rate_Encoder(timesteps)

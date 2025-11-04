@@ -131,7 +131,7 @@ def train_test_val_split(
         metadata_df = pd.concat([neg_sampled, pos_df]).sample(frac=1, random_state=42).reset_index(drop=True)
 
     patients = metadata_df['patient'].unique()
-    train_val_patients, test_patients = train_test_split(patients, test_size=test_prop, random_state=random_state)
+    train_val_patients, test_patients = train_test_split(patients, test_size=test_prop, random_state=42)
     
     train_patients, val_patients = train_test_split(train_val_patients, test_size=val_prop, random_state=random_state)
 
