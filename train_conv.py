@@ -12,7 +12,7 @@ from dataloader import train_test_val_split
 from models import SpikingCNN
 from utils.encoding import Rate_Encoder_CNN
 
-from utils.logging import log_model
+from utils.logger import log_model
 import utils.metrics as metrics
 
 def train_step(model, train_loader, encoder, optimizer, loss_fn, epoch, device):

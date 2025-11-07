@@ -97,6 +97,7 @@ class TwoLayerSNN(nn.Module):
                 }
             },
             spike_accumulator: str = 'sum',
+            logging_mode: bool = False,
         ):
 
         '''
@@ -107,6 +108,7 @@ class TwoLayerSNN(nn.Module):
         out_act_kwargs: kwargs to pass to output layer
         neuron_options: kwargs to pass to SNN_Cell
         spike_accumulator: either "sum" or "last" -> how to pass spikes to prediction layer
+        logging_mode: whether or not to return all spikes for analysis/visualization
         '''
 
         super(TwoLayerSNN, self).__init__()
@@ -122,6 +124,8 @@ class TwoLayerSNN(nn.Module):
         self.fc = HebbianLinearLayer(self.recurrent_dims[1], self.out_dims, **neuron_options['linear_options'])
         self.fc_act = get_activation_fn(out_act, out_act_kwargs)
 
+        self.logging_mode = logging_mode
+
     def forward(self, x):
         # x shape: B x T x IN_DIMS
 
@@ -135,6 +139,9 @@ class TwoLayerSNN(nn.Module):
 
         out_spikes = []
 
+        all_z_0s = []
+        all_z_1s = []
+
         for t in range(T):
             x_t = x[:, t, :]
 
@@ -142,6 +149,10 @@ class TwoLayerSNN(nn.Module):
             v_1, z_1 = self.snn_2(z_0, v_1, z_1)
 
             out_spikes.append(z_1)
+
+            if self.logging_mode:
+                all_z_0s.append(z_0.detach())
+                all_z_1s.append(z_1.detach())
         
         if self.accumulate == 'sum':
             out_spikes = torch.stack(out_spikes).transpose(0, 1).mean(1)
@@ -150,6 +161,9 @@ class TwoLayerSNN(nn.Module):
         else:
             output = self.fc(z_1)
             output = self.fc_act(output)
+
+        if self.logging_mode:
+            return output, torch.stack(all_z_0s), torch.stack(all_z_1s)
 
         return output
     

@@ -10,7 +10,6 @@ import neurokit2 as nk
 from scipy import stats
 import scipy.signal as signal
 
-from config import ARR_DATA_DIR, NSR_DATA_DIR, ARRHYTHMIA_TO_ENCODING, NSR_TO_ENCODING
 
 '''
 this script will be used to preprocess -> slice -> label -> save ecg data
@@ -22,6 +21,41 @@ output format:
     hdf5: sample array
 
 '''
+
+ARR_DATA_DIR = '/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/mit-bih-arrhythmia-database-1.0.0'
+ARRHYTHMIA_TO_ENCODING = {
+    '(AB': 2,
+    '(AFIB': 1,
+    '(AFIB': 1,
+    '(AFL': 2,
+    '(B': 3,
+    '(BII': 5,
+    '(IVR': 3,
+    '(N': 0,
+    '(NOD': 2,
+    '(P': 4,
+    '(PREX': 4,
+    '(SBR': 0,
+    '(SVTA': 2,
+    '(T': 3,
+    '(VFL': 3,
+    '(VT': 3,
+    'MISSB': -1,
+    'PSE': -1,
+    'TS': -1, 
+    '': -1,
+}
+
+
+NSR_TO_ENCODING = {
+    'F': -1, 
+    'J': -1, 
+    'N': 0, 
+    'S': -1, 
+    'V': -1, 
+    '|': -1, 
+    '~': -1
+}
 
 def get_per_sample_label(signal_array, annotation, dataset):
     # signal_array: 1d array of ECG data

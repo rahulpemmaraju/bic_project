@@ -10,10 +10,10 @@ import numpy as np
 import pandas as pd
 
 from dataloader import train_test_val_split, get_dataset_statistics
-from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN, TwoLayer_HierarchicalSNN, TwoLayer_MultiscaleSNN
+from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN
 from utils.encoding import Rate_Encoder, Current_Encoder
 
-from utils.logging import log_model
+from utils.logger import log_model
 import utils.metrics as metrics
 
 def train_step(model, train_loader, encoder, optimizer, loss_fn, epoch, device):
@@ -137,9 +137,26 @@ def train_model(
     return train_losses, val_losses
 
 if __name__ == '__main__':
+    import argparse
+    import yaml
 
-    seed = 42
-    device = 'cpu'
+    # load in data from relavent config files
+    parser = argparse.ArgumentParser(description="train a model using specific training configurations")
+    parser.add_argument("train_config", help="name of config file to train model")
+
+    args = parser.parse_args()
+
+    # read in the paths to where to read from/to data
+    with open('configs/paths.yaml', 'r') as file:
+        path_configs = yaml.safe_load(file)
+    
+    # read in the instructions for how to train model
+    with open(f'configs/model_configs/{args.train_config}', 'r') as file:
+        train_configs = yaml.safe_load(file)
+
+
+    seed = train_configs['seed']
+    device = train_configs['device']
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
@@ -147,22 +164,18 @@ if __name__ == '__main__':
 
 
     # --- Create Datasets/DataLoaders --- #
-    binary = True
+    binary = train_configs['binary']
 
     dataset_configs = {
-        "data_file": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.hdf5",
-        "metadata": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.csv",
-        "train_prop": 0.6,
-        "val_prop": 0.2,
-        "test_prop": 0.2,
+        "data_file": os.path.join(path_configs['data_folder'], train_configs['dataset'], f"{train_configs['dataset']}.hdf5"),
+        "metadata":  os.path.join(path_configs['data_folder'], train_configs['dataset'], f"{train_configs['dataset']}.csv"),
         "binary": binary,
         "random_state": seed,
-        "balance": True,
-        "fourier": False,
+        **train_configs['dataset_configs']
     }
 
-    train_batch_size = 64
-    eval_batch_size = 128
+    train_batch_size = train_configs['train_batch_size']
+    eval_batch_size = train_configs['eval_batch_size']
 
     train_dataset, val_dataset, test_dataset = train_test_val_split(**dataset_configs)
     train_mean, train_std = get_dataset_statistics(train_dataset)
@@ -171,55 +184,45 @@ if __name__ == '__main__':
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=eval_batch_size)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=eval_batch_size)
 
-    if binary:
-        out_dims = 1
-    else:
-        out_dims = 5
-
     # --- Model Configs --- #
-    model_configs = {
-        'in_dims': 1,
-        'out_dims': out_dims,
-        'recurrent_dims': [32, 64],
-        'out_act': 'none',
-        'out_act_kwargs': {},
-        'neuron_options': {
-            'beta': 0.9,
-            'threshold': 1.0,
-            'spike_grad': surrogate.atan(alpha=2), 
-            'linear_options':{
-                'learning_rule': 'oja',
-                'learning_rate': 1e-4,
-                'bias': True
-            }
-        },
-        'spike_accumulator': 'sum',
-    }
+    model_configs = train_configs['model_configs']
+    if model_configs['neuron_options']['spike_grad'] == 'atan':
+        model_configs['neuron_options']['spike_grad'] = surrogate.atan(alpha=2)
 
     logging_configs={
-        'model_name': f's_{seed}_two_layer_snn_binary_32_64_current_balanced',
-        'weight_folder': '../train_weights',
-        'log_folder': '../train_logs',
-        'log_steps': 1
+        'model_name': train_configs['model_name'],
+        'weight_folder': path_configs['weight_folder'],
+        'log_folder': path_configs['log_folder'],
+        'log_steps': train_configs['log_steps']
     }
     
     # --- Train the Model --- #
-    model = TwoLayerSNN(**model_configs)
+    if train_configs['model_class'] == 'TwoLayerSNN':
+        model = TwoLayerSNN(**model_configs)
+    else:
+        model = SpikingNetwork(**model_configs)
 
-    timesteps = 20
-    encoder = Rate_Encoder(timesteps)
-    encoder = Current_Encoder(train_mean, train_std)
+    if train_configs['encoder'] == 'rate':
+        encoder = Rate_Encoder(**train_configs['encoder_args'])
+    else:
+        encoder = Current_Encoder(train_mean, train_std)
 
-    learning_rate = 5e-4
-    optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+    learning_rate = train_configs['lr']
 
+    if train_configs['optimizer'] == 'AdamW':
+        optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+    elif train_configs['optimizer'] == 'Adam':
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    elif train_configs['optimizer'] == 'SGD':
+        optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+    
     if binary:
         loss_fn = nn.BCEWithLogitsLoss() # higher pos_weight -> correct positive prediction is more important 
     else:
         loss_fn = nn.CrossEntropyLoss()
 
-    num_epochs = 5
-    val_steps = 1
+    num_epochs = train_configs['num_epochs']
+    val_steps = train_configs['val_steps']
 
     print('Training Model')
 

@@ -11,7 +11,7 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 
 from dataloader import train_test_val_split, get_dataset_statistics
-from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN, TwoLayer_HierarchicalSNN, TwoLayer_MultiscaleSNN
+from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN
 from utils.encoding import Rate_Encoder, Current_Encoder
 
 # get 5-fold validation model performance
@@ -52,98 +52,87 @@ def get_binary_metrics(model, test_loader, encoder, threshold, device='cpu'):
 
 if __name__ == '__main__':
 
-    random_seeds = [0, 1, 2, 3, 42]
 
-    # --- Create Datasets/DataLoaders --- #
-    binary = True
+    import argparse
+    import yaml
+
+    # load in data from relavent config files
+    parser = argparse.ArgumentParser(description="train a model using specific training configurations")
+    parser.add_argument("train_config", help="name of config file to train model")
+
+    args = parser.parse_args()
+
+    # read in the paths to where to read from/to data
+    with open('configs/paths.yaml', 'r') as file:
+        path_configs = yaml.safe_load(file)
+    
+    # read in the instructions for how to train model
+    with open(f'configs/model_configs/{args.train_config}', 'r') as file:
+        train_configs = yaml.safe_load(file)
+
+    seed = train_configs['seed']
+    device = train_configs['device']
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    # --- Create Datasets/DataLoaders --- #    
+    binary = train_configs['binary']
 
     dataset_configs = {
-        "data_file": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.hdf5",
-        "metadata": "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/beat_neurokit_1.csv",
-        "train_prop": 0.6,
-        "val_prop": 0.2,
-        "test_prop": 0.2,
+        "data_file": os.path.join(path_configs['data_folder'], train_configs['dataset'], f"{train_configs['dataset']}.hdf5"),
+        "metadata":  os.path.join(path_configs['data_folder'], train_configs['dataset'], f"{train_configs['dataset']}.csv"),
         "binary": binary,
-        "random_state": 42,
-        "balance": True,
-        "fourier": False,
+        "random_state": 0,
+        **train_configs['dataset_configs']
     }
 
-    train_batch_size = 64
-    eval_batch_size = 128
+    logging_configs={
+        'model_name': train_configs['model_name'],
+        'weight_folder': path_configs['weight_folder'],
+        'log_folder': path_configs['log_folder'],
+        'log_steps': train_configs['log_steps']
+    }
 
-    train_dataset, _, test_dataset = train_test_val_split(**dataset_configs)
+    train_batch_size = train_configs['train_batch_size']
+    eval_batch_size = train_configs['eval_batch_size']
+
+    train_dataset, val_dataset, test_dataset = train_test_val_split(**dataset_configs)
     train_mean, train_std = get_dataset_statistics(train_dataset)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=eval_batch_size)
 
-    if binary:
-        out_dims = 1
+     # --- Model Configs --- #
+    model_configs = train_configs['model_configs']
+    if model_configs['neuron_options']['spike_grad'] == 'atan':
+        model_configs['neuron_options']['spike_grad'] = surrogate.atan(alpha=2)
+
+    # --- Train the Model --- #
+    if train_configs['model_class'] == 'TwoLayerSNN':
+        model = TwoLayerSNN(**model_configs)
     else:
-        out_dims = 5
+        model = SpikingNetwork(**model_configs)
 
-    # --- Model Configs --- #
-    model_configs = {
-        'in_dims': 1,
-        'out_dims': out_dims,
-        'recurrent_dims': [32, 64],
-        'out_act': 'none',
-        'out_act_kwargs': {},
-        'neuron_options': {
-            'beta': 0.9,
-            'threshold': 1.0,
-            'spike_grad': surrogate.atan(alpha=2), 
-            'linear_options':{
-                'learning_rule': 'oja',
-                'learning_rate': 1e-4,
-                'bias': True
-            }
-        },
-        'spike_accumulator': 'sum',
-    }
+    if train_configs['encoder'] == 'rate':
+        encoder = Rate_Encoder(**train_configs['encoder_args'])
+    else:
+        encoder = Current_Encoder(train_mean, train_std)
 
-    model_name = 'two_layer_h_snn_binary_32_64_current_balanced'
-    model_weights = [f's_{seed}_{model_name}' for seed in random_seeds]
-    weight_folder = '../train_weights'
-    results_folder = '../model_results'
+    model_path = os.path.join(logging_configs['weight_folder'], logging_configs['model_name']) + '.pth'
+    checkpoint = torch.load(model_path, weights_only=False)
+    model.load_state_dict(checkpoint['model'])
 
-    os.makedirs(results_folder, exist_ok=True)
-
-    results_path = os.path.join(results_folder, model_name + '.csv')
-    
-    model = TwoLayer_HierarchicalSNN(**model_configs)
-    encoder = Current_Encoder(train_mean, train_std)
-
-    model_vals = []
-
-    for model_weight in model_weights:
-
-        model_path = os.path.join(weight_folder, model_weight) + '.pth'
-        checkpoint = torch.load(model_path, weights_only=False)
-        model.load_state_dict(checkpoint['model'])
+    threshold = None
+    if binary:
         threshold = checkpoint['threshold']
 
-        accuracy, sensitivity, specificity, ppv, npv = get_binary_metrics(model, test_loader, encoder, threshold)
 
-        model_vals.append(
-            {
-                'accuracy': accuracy,
-                'sensitivity': sensitivity,
-                'specificity': specificity,
-                'ppv': ppv,
-                'npv': npv
-            }
-        )
+    accuracy, sensitivity, specificity, ppv, npv = get_binary_metrics(model, test_loader, encoder, threshold)
 
-    
-
-    model_df = pd.DataFrame(model_vals)
-    mean_vals = model_df.mean()
-    std_vals = model_df.std()
-
-    model_df.loc["mean"] = mean_vals
-    model_df.loc["std"] = std_vals
-
-    print(model_df)
-
-    model_df.to_csv(results_path, index=True)
+    print(f"--- {train_configs['model_name']} Performance ---")
+    print(f'Accuracy: {accuracy}')
+    print(f'Sensitivity: {sensitivity}')
+    print(f'Specificity: {specificity}')
+    print(f'PPV: {ppv}')
+    print(f'NPV: {npv}')
