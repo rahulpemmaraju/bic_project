@@ -14,8 +14,6 @@ from dataloader import train_test_val_split, get_dataset_statistics
 from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN
 from utils.encoding import Rate_Encoder, Current_Encoder
 
-# get 5-fold validation model performance
-
 def get_binary_metrics(model, test_loader, encoder, threshold, device='cpu'):
     y_true = []
     y_pred = []
@@ -51,8 +49,6 @@ def get_binary_metrics(model, test_loader, encoder, threshold, device='cpu'):
 
 
 if __name__ == '__main__':
-
-
     import argparse
     import yaml
 
@@ -108,7 +104,6 @@ if __name__ == '__main__':
     if model_configs['neuron_options']['spike_grad'] == 'atan':
         model_configs['neuron_options']['spike_grad'] = surrogate.atan(alpha=2)
 
-    # --- Train the Model --- #
     if train_configs['model_class'] == 'TwoLayerSNN':
         model = TwoLayerSNN(**model_configs)
     else:

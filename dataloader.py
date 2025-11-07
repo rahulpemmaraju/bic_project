@@ -42,7 +42,7 @@ class ECGWaveformDataset(Dataset):
         label = torch.tensor(sample.label, dtype=torch.long)
 
         if self.binary:
-            label = torch.tensor(label > 0, dtype=torch.float32)
+            label = (label > 0).to(torch.float32)
 
         if self.out_size is not None:
             t_old = np.linspace(0, 1, len(waveform))
@@ -92,7 +92,7 @@ class ECGSpectrogramDataset(Dataset):
         label = sample.label
 
         if self.binary:
-            label = torch.tensor(label > 0, dtype=torch.float32)
+            label = (label > 0).to(torch.float32)
 
         return img, label
 
@@ -136,7 +136,7 @@ def train_test_val_split(
 
     patients = metadata_df['patient'].unique()
     train_val_patients, test_patients = train_test_split(patients, test_size=test_prop, random_state=42)
-    print(test_patients)
+    # print(test_patients)
     train_patients, val_patients = train_test_split(train_val_patients, test_size=val_prop, random_state=random_state)
 
     train_df = metadata_df[metadata_df['patient'].isin(train_patients)]

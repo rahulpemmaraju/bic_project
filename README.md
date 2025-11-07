@@ -29,7 +29,7 @@ Run any model using the configurations prescribed in a specific file. You just h
 python train_linear.py {name of config file}
 ```
 
-Training legs and evaluation on the test set (in the form of ROC curves and confusion matrices) will be saved in your defined ```log_folder```.
+Training logs and evaluation on the test set (in the form of ROC curves and confusion matrices) will be saved in your defined ```log_folder```.
 
 ## 3. Get Performance Metrics for a Trained Model
 Accuracy, sensitivity, specificity, PPV, and NVP for a trained model can be computed using the same model_configs file used to train the model.
