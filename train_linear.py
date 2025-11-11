@@ -183,6 +183,7 @@ if __name__ == '__main__':
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=eval_batch_size)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=eval_batch_size)
+    print(test_dataset.metadata['patient'].unique())
 
     # --- Model Configs --- #
     model_configs = train_configs['model_configs']
@@ -237,7 +238,7 @@ for param in model.fc.parameters():
     if binary:
         loss_fn = nn.BCEWithLogitsLoss() # higher pos_weight -> correct positive prediction is more important 
     else:
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = nn.CrossEntropyLoss(torch.tensor([1., 1., 1., 1., 1.])) # weighted CE Loss -> more heavily weights arrs
 
     num_epochs = train_configs['num_epochs']
     val_steps = train_configs['val_steps']
@@ -273,3 +274,5 @@ for param in model.fc.parameters():
 
     if binary:
         metrics.get_roc_curve(model, test_loader, encoder, threshold, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)
+    else:
+        metrics.get_multiclass_metrics(model, test_loader, encoder, os.path.join(logging_configs['log_folder'], logging_configs['model_name']), device)

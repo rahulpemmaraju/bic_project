@@ -1,8 +1,8 @@
-seed: 42 # pass to the dataset configs as well
+seed: 0 # pass to the dataset configs as well
 device: 'cpu'
-binary: True # pass to the dataset configs as well
+binary: False # pass to the dataset configs as well
 
-model_name: "pretrained_oja_binary_rate_encoding"
+model_name: "multiclass_current_encoding"
 
 # dataset configs
 dataset: "arr_beat_1s_nk"
@@ -22,14 +22,13 @@ log_steps: 1
 
 # model configs #
 model_class: "TwoLayerSNN"
-pretrained_weights: "sanger_binary_rate_encoding"
 
 model_configs:
-  in_dims: 360
-  out_dims: 1
+  in_dims: 1
+  out_dims: 5
   recurrent_dims:
-    - 120
-    - 60
+    - 32
+    - 64
   out_act: "none"
   out_act_kwargs: {}
   neuron_options:
@@ -43,9 +42,9 @@ model_configs:
   spike_accumulator: "sum"
 
 # encoder configs #
-encoder: "rate"
+encoder: "current"
 encoder_args:
-  timesteps: 20
+  
 
 # training configs #
 lr: 0.0005

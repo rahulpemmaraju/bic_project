@@ -1,8 +1,8 @@
-seed: 42 # pass to the dataset configs as well
+seed: 0 # pass to the dataset configs as well
 device: 'cpu'
-binary: True # pass to the dataset configs as well
+binary: False # pass to the dataset configs as well
 
-model_name: "pretrained_oja_binary_rate_encoding"
+model_name: "multiclass_rate_encoding"
 
 # dataset configs
 dataset: "arr_beat_1s_nk"
@@ -22,11 +22,10 @@ log_steps: 1
 
 # model configs #
 model_class: "TwoLayerSNN"
-pretrained_weights: "sanger_binary_rate_encoding"
 
 model_configs:
   in_dims: 360
-  out_dims: 1
+  out_dims: 5
   recurrent_dims:
     - 120
     - 60

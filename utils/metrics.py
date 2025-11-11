@@ -117,3 +117,33 @@ def get_roc_curve(model, test_loader, encoder, threshold, log_dir, device='cpu')
     plt.title("Confusion Matrix")
     plt.savefig(os.path.join(log_dir, 'test_confusion_matrix.png'), dpi=300, bbox_inches='tight')
     plt.show()
+
+def get_multiclass_metrics(model, test_loader, encoder, log_dir, device='cpu'):
+    y_true = []
+    y_pred = []
+
+    model.eval()
+
+    with torch.no_grad():
+        for data, target in test_loader:
+
+            if encoder is not None:
+                data = encoder.encode(data)
+
+            data, target = data.to(device), target.to(device)
+
+            output = model(data).argmax(1)
+    
+            y_true.append(target.numpy())
+            y_pred.append(output.numpy())
+
+    y_true = np.concatenate(y_true, axis=0)
+    y_pred = np.concatenate(y_pred, axis=0)
+
+    cm = confusion_matrix(y_true, y_pred)
+    disp = ConfusionMatrixDisplay(cm)
+    disp.plot(cmap='Blues')
+
+    plt.title("Confusion Matrix")
+    plt.savefig(os.path.join(log_dir, 'test_confusion_matrix.png'), dpi=300, bbox_inches='tight')
+    plt.show()

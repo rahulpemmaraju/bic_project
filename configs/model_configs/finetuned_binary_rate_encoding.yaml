@@ -23,6 +23,7 @@ log_steps: 1
 # model configs #
 model_class: "TwoLayerSNN"
 pretrained_weights: "sanger_binary_rate_encoding"
+finetune: true
 
 model_configs:
   in_dims: 360

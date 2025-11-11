@@ -8,7 +8,8 @@ import os
 import random
 import numpy as np
 import pandas as pd
-from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score
 
 from dataloader import train_test_val_split, get_dataset_statistics
 from models import SpikingNetwork, TwoLayerSNN, ThreeLayerSNN
@@ -46,6 +47,35 @@ def get_binary_metrics(model, test_loader, encoder, threshold, device='cpu'):
     npv = tn / (tn + fn + 1e-8)
 
     return accuracy, sensitivity, specificity, ppv, npv
+
+def get_multiclass_metrics(model, test_loader, encoder, device='cpu'):
+    y_true = []
+    y_pred = []
+
+    model.eval()
+
+    with torch.no_grad():
+        for data, target in test_loader:
+
+            if encoder is not None:
+                data = encoder.encode(data)
+
+            data, target = data.to(device), target.to(device)
+
+            output = model(data).argmax(1)
+    
+            y_true.append(target.numpy())
+            y_pred.append(output.numpy())
+
+    y_true = np.concatenate(y_true, axis=0)
+    y_pred = np.concatenate(y_pred, axis=0)
+    
+    accuracy = (y_true == y_pred).mean()
+    
+    f1 = f1_score(y_true, y_pred, average='weighted')
+
+    return accuracy, f1
+
 
 
 if __name__ == '__main__':
@@ -121,13 +151,18 @@ if __name__ == '__main__':
     threshold = None
     if binary:
         threshold = checkpoint['threshold']
+        accuracy, sensitivity, specificity, ppv, npv = get_binary_metrics(model, test_loader, encoder, threshold)
 
+        print(f"--- {train_configs['model_name']} Performance ---")
+        print(f'Accuracy: {accuracy}')
+        print(f'Sensitivity: {sensitivity}')
+        print(f'Specificity: {specificity}')
+        print(f'PPV: {ppv}')
+        print(f'NPV: {npv}')
 
-    accuracy, sensitivity, specificity, ppv, npv = get_binary_metrics(model, test_loader, encoder, threshold)
+    else:
+        accuracy, f1 = get_multiclass_metrics(model, test_loader, encoder)
 
-    print(f"--- {train_configs['model_name']} Performance ---")
-    print(f'Accuracy: {accuracy}')
-    print(f'Sensitivity: {sensitivity}')
-    print(f'Specificity: {specificity}')
-    print(f'PPV: {ppv}')
-    print(f'NPV: {npv}')
+        print(f"--- {train_configs['model_name']} Performance ---")
+        print(f'Accuracy: {accuracy}')
+        print(f'F1 Score: {f1}')
