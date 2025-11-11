@@ -1,4 +1,5 @@
 mit_bih_arr_path: "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/mit-bih-arrhythmia-database-1.0.0"
+mit_bih_nsr_path: "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/mit-bih-normal-sinus-rhythm-database-1.0.0"
 
 data_folder: "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/windowed_data"
 weight_folder: "/Users/rahul/Documents/G1/BrainInspiredComputing/TermProject/train_weights"

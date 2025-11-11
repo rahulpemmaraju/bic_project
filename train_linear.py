@@ -202,6 +202,24 @@ if __name__ == '__main__':
     else:
         model = SpikingNetwork(**model_configs)
 
+    if "pretrained_weights" in train_configs:
+        model.load_state_dict(torch.load(os.path.join(path_configs['weight_folder'], f"{train_configs['pretrained_weights']}.pth")))
+
+    if "finetune" in train_configs:
+        if train_configs["finetune"]:
+            for param in model.snn_1.parameters():
+                param.requires_grad = False
+
+            for param in model.snn_2.parameters():
+                param.requires_grad = False
+            for param in model.fc.parameters():
+                param.requires_grad = True
+
+
+# Make sure fc layer is trainable
+for param in model.fc.parameters():
+    param.requires_grad = True
+
     if train_configs['encoder'] == 'rate':
         encoder = Rate_Encoder(**train_configs['encoder_args'])
     else:

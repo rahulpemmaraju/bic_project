@@ -202,7 +202,6 @@ class TwoLayerSNN(nn.Module):
     def apply_weight_change(self):
         self.snn_1.apply_weight_change()
         self.snn_2.apply_weight_change()
-        self.fc.apply_weight_change()
 
     
 # 3-Layer SNN Using LIF Neurons

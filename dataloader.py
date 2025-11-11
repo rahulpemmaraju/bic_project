@@ -167,6 +167,13 @@ def get_dataset_statistics(dataset):
     all_samples = [dataset.__getitem__(i)[0] for i in range(len(dataset))]
     return np.mean(all_samples), np.std(all_samples)
 
+def sample_dataset_statistics(dataset, n=10000):
+    # returns the mean and standard deviation of a sample of the dataset (useful for normalization)
+    indeces = np.random.randint(0, len(dataset), size=n)
+    all_samples = [dataset.__getitem__(i)[0] for i in indeces]
+    return np.mean(all_samples), np.std(all_samples)
+
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 

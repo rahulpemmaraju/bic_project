@@ -1,0 +1,5 @@
+dataset_name: "unsupervised_beat_1s_nk"
+
+window_length: 1
+preprocessing_method: "neurokit"
+

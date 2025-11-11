@@ -1,0 +1,39 @@
+seed: 42 # pass to the dataset configs as well
+device: 'cpu'
+binary: True # pass to the dataset configs as well
+
+model_name: "oja_binary_rate_encoding"
+
+# dataset configs
+dataset: "unsupervised_beat_1s_nk"
+train_batch_size: 128
+
+# model configs #
+model_class: "TwoLayerSNN"
+
+model_configs:
+  in_dims: 360
+  out_dims: 1
+  recurrent_dims:
+    - 120
+    - 60
+  out_act: "none"
+  out_act_kwargs: {}
+  neuron_options:
+    beta: 0.9
+    threshold: 1.0
+    spike_grad: "atan"
+    linear_options:
+      learning_rule: "oja"
+      learning_rate: 0.0001
+      bias: true
+  spike_accumulator: "sum"
+
+# encoder configs #
+encoder: "rate"
+encoder_args:
+  timesteps: 20
+
+# training configs #
+num_epochs: 1
+
