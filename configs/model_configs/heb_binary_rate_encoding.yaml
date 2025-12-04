@@ -2,7 +2,7 @@ seed: 42 # pass to the dataset configs as well
 device: 'cpu'
 binary: True # pass to the dataset configs as well
 
-model_name: "oja_binary_rate_encoding"
+model_name: "heb_binary_rate_encoding"
 
 # dataset configs
 dataset: "unsupervised_beat_1s_nk"
@@ -24,7 +24,7 @@ model_configs:
     threshold: 1.0
     spike_grad: "atan"
     linear_options:
-      learning_rule: "oja"
+      learning_rule: "hebb"
       learning_rate: 0.001
       bias: true
   spike_accumulator: "sum"

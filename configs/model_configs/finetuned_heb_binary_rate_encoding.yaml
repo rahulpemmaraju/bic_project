@@ -2,7 +2,7 @@ seed: 42 # pass to the dataset configs as well
 device: 'cpu'
 binary: True # pass to the dataset configs as well
 
-model_name: "pretrained_oja_binary_rate_encoding"
+model_name: "finetuned_heb_binary_rate_encoding"
 
 # dataset configs
 dataset: "arr_beat_1s_nk"
@@ -22,7 +22,7 @@ log_steps: 1
 
 # model configs #
 model_class: "TwoLayerSNN"
-pretrained_weights: "sanger_binary_rate_encoding"
+pretrained_weights: heb_binary_rate_encoding
 finetune: true
 
 model_configs:

@@ -210,16 +210,15 @@ if __name__ == '__main__':
         if train_configs["finetune"]:
             for param in model.snn_1.parameters():
                 param.requires_grad = False
-
             for param in model.snn_2.parameters():
                 param.requires_grad = False
             for param in model.fc.parameters():
                 param.requires_grad = True
 
 
-# Make sure fc layer is trainable
-for param in model.fc.parameters():
-    param.requires_grad = True
+    # Make sure fc layer is trainable
+    for param in model.fc.parameters():
+        param.requires_grad = True
 
     if train_configs['encoder'] == 'rate':
         encoder = Rate_Encoder(**train_configs['encoder_args'])
