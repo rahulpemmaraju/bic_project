@@ -69,3 +69,21 @@ Accuracy, sensitivity, specificity, PPV, and NVP for a trained model can be comp
 ```python
 python get_model_performance.py {name of config file}
 ```
+
+## 4. Generate Figures Used in the Final Report
+To generate all figures used in the final report, please run the ```generate_figures.ipynb``` notebook. Please note that several models have to be trained in order to generate all figures. These can be trained using the following commands:
+
+```
+python train_linear.py binary_rate_encoding.yaml
+python train_linear.py binary_current_encoding.yaml
+
+python unsupervised_train_linear.py heb_binary_rate_encoding.yaml
+python unsupervised_train_linear.py oja_binary_rate_encoding.yaml
+python unsupervised_train_linear.py sanger_binary_rate_encoding.yaml
+
+python train_linear.py finetuned_heb_binary_rate_encoding.yaml
+python train_linear.py finetuned_oja_binary_rate_encoding.yaml
+python train_linear.py finetuned_rand_binary_rate_encoding.yaml
+python train_linear.py finetuned_sanger_binary_rate_encoding.yaml
+
+```
